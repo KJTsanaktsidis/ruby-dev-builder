@@ -4,6 +4,9 @@ on:
   push:
     tags:
     - '*'
+    # TEMP to build this branch and see if it works...
+    branches:
+    - '*'
   schedule:
   - cron: '0 19 * * *'
 jobs:
