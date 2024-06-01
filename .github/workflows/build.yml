@@ -80,6 +80,9 @@ jobs:
       matrix:
         os: [ ubuntu-20.04, ubuntu-22.04, ubuntu-24.04, macos-11, macos-arm-oss ]
         name: [ head, debug ]
+        include:
+          - os: ubuntu-22.04
+            name: asan
     runs-on: ${{ matrix.os }}
     steps:
     - name: Clone ruby
@@ -128,6 +131,28 @@ jobs:
         echo "cppflags=-DENABLE_PATH_CHECK=0 -DRUBY_DEBUG=1" >> $GITHUB_ENV
         echo "optflags=-O3 -fno-inline" >> $GITHUB_ENV
       if: matrix.name == 'debug'
+
+    - name: Install Clang 18
+      run: |
+        set -ex;
+        sudo add-apt-repository 'deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main'
+        sudo apt update
+        sudo apt install -y clang-18
+    - name: Compile dependencies with ASAN
+      run: './asan_libs.sh'
+      if: matrix.name == 'asan'
+    - name: Set configure flags (asan)
+      run: |
+        echo "optflags=-O3 -fno-inline" >> $GITHUB_ENV
+        # Compile with ASAN
+        echo "cflags=-fsanitize=address -fno-omit-frame-poiner" >> $GITHUB_ENV
+        # Requires clang 18
+        echo "CC=clang-18"
+        # Clang > 17 does not work with M:N threading: https://bugs.ruby-lang.org/issues/20243
+        echo "cppflags=-DENABLE_PATH_CHECK=0 -DRUBY_DEBUG=1 -DVM_CHECK_MODE=1 -DUSE_MN_THREADS=0" >> $GITHUB_ENV
+        # And statically link against our ASAN-compiled libraries
+        echo "LDFLAGS=-L$(realpath third_party_asan/lib/) -Wl,-Bstatic -lcrypto -lssl -lyaml -lffi -Wl,-Bdynamic" >> $GITHUB_ENV
+      if: matrix.name == 'asan'
 
     # Build
     - run: chmod 755 $HOME # https://github.com/actions/virtual-environments/issues/267
